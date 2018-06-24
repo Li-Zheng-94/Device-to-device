@@ -7,7 +7,6 @@ class Channel(object):
     def __init__(self, rx_id):
         self.__rx_id = rx_id
         self.__link_loss = {}  # 存储链路损耗的字典 键——发射机id值 值——链路损耗
-        self.__id2direction = {}  # 存储行进方向的字典 键——发射机id值 值——方向
         self.__id2distance = {}  # 存储距离的字典 键——发射机id值 值——距离
 
     def update_link_loss(self, tx_device, rx_device):
@@ -24,9 +23,6 @@ class Channel(object):
 
     def get_link_loss(self, tx_id):
         return self.__link_loss[tx_id]
-
-    def get_direction(self, tx_id):
-        return self.__id2direction[tx_id]
 
     def get_distance(self, tx_id):
         return self.__id2distance[tx_id]
