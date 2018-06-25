@@ -1,0 +1,80 @@
+from device import *
+import random
+import math
+
+
+# 单小区拓扑类
+class SingleCell(object):
+    def __init__(self, radius, cue_num, d2d_num, rb_num, up_or_down_link, d_tx2rx):
+        self.__radius = radius  # 小区半径
+        self.__cue_num = cue_num
+        self.__d2d_num = d2d_num
+        self.__rb_num = rb_num
+        self.__up_or_down_link = up_or_down_link
+        self.__d_tx2rx = d_tx2rx  # D2D发射机与接收机之间的最大距离
+
+        self.__dict_id2device = {}  # id-设备对象登记表
+        self.__dict_id2rx = {}  # id-接收机对象登记表
+        self.__dict_id2tx = {}  # id-发射机对象登记表
+        self.__dict_id2channel = {}  # 接收机id-信道对象登记表
+
+    def initial(self):
+        # 生成基站对象
+        bs = BS(0)  # 一个基站 id = 0
+        self.__dict_id2device[0] = bs
+        if self.__up_or_down_link == 'down':
+            self.__dict_id2tx[0] = bs
+        else:
+            self.__dict_id2rx[0] = bs
+
+        # 生成蜂窝用户对象
+        for i_id in range(1, 1+self.__cue_num):
+            cue = CUE(i_id)
+            x, y = self.random_position()
+            cue.set_location(x, y)
+            self.__dict_id2device[i_id] = cue
+            if self.__up_or_down_link == 'down':
+                self.__dict_id2rx[i_id] = cue
+            else:
+                self.__dict_id2tx[i_id] = cue
+
+        # 生成D2D对象
+        for i_id in range(1+self.__cue_num, 1+self.__cue_num+self.__d2d_num):
+            # D2D发射机对象
+            d2d_tx = D2DTx(i_id)
+            tx_x, tx_y = self.random_position()
+            d2d_tx.set_location(tx_x, tx_y)
+            d2d_tx.make_pair(i_id+self.__d2d_num)
+
+            # D2D接收机对象
+            d2d_rx = D2DRx(i_id+self.__d2d_num)
+            rx_x, rx_y = self.d2d_rx_position(self.__d_tx2rx, tx_x, tx_y)
+            d2d_rx.set_location(rx_x, rx_y)
+            d2d_rx.make_pair(i_id)
+
+            self.__dict_id2device[i_id] = d2d_tx
+            self.__dict_id2tx[i_id] = d2d_tx
+            self.__dict_id2device[i_id+self.__d2d_num] = d2d_rx
+            self.__dict_id2rx[i_id+self.__d2d_num] = d2d_rx
+
+    # 在单小区范围内随机生成位置
+    def random_position(self):
+        theta = random.random() * 2 * math.pi
+        r = random.uniform(0, self.__radius)
+        x = r * math.sin(theta)
+        y = r * math.cos(theta)
+        return x, y
+
+    # 根据发射机的位置，在半径 r 范围内随机生成接收机位置
+    def d2d_rx_position(self, r, tx_x, tx_y):
+        x, y = self.__radius, self.__radius
+        while x**2 + y**2 > self.__radius**2:
+            theta = random.random() * 2 * math.pi
+            r = random.uniform(0, r)
+            x = r * math.sin(theta) + tx_x
+            y = r * math.cos(theta) + tx_y
+        return x, y
+
+    # 初始化信道
+    def initial_channel(self):
+        pass
