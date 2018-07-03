@@ -1,4 +1,5 @@
-from device import *
+from channel import *
+from resource_allocation import *
 import random
 import math
 
@@ -19,14 +20,6 @@ class SingleCell(object):
         self.__dict_id2channel = {}  # 接收机id-信道对象登记表
 
     def initial(self):
-        # 生成基站对象
-        bs = BS(0)  # 一个基站 id = 0
-        self.__dict_id2device[0] = bs
-        if self.__up_or_down_link == 'down':
-            self.__dict_id2tx[0] = bs
-        else:
-            self.__dict_id2rx[0] = bs
-
         # 生成蜂窝用户对象
         for i_id in range(1, 1+self.__cue_num):
             cue = CUE(i_id)
@@ -37,6 +30,16 @@ class SingleCell(object):
                 self.__dict_id2rx[i_id] = cue
             else:
                 self.__dict_id2tx[i_id] = cue
+
+        # 生成基站对象
+        bs = BS(0)  # 一个基站 id = 0
+        self.__dict_id2device[0] = bs
+        if self.__up_or_down_link == 'down':
+            self.__dict_id2tx[0] = bs
+        else:
+            for tx_id in self.__dict_id2tx:
+                bs.set_tx(tx_id)
+            self.__dict_id2rx[0] = bs
 
         # 生成D2D对象
         for i_id in range(1+self.__cue_num, 1+self.__cue_num+self.__d2d_num):
@@ -57,6 +60,15 @@ class SingleCell(object):
             self.__dict_id2device[i_id+self.__d2d_num] = d2d_rx
             self.__dict_id2rx[i_id+self.__d2d_num] = d2d_rx
 
+        # 生成信道 一个接收机对应一个信道对象
+        for rx_id in self.__dict_id2rx:  # 遍历所有的接收机
+            temp_channel = Channel(rx_id)
+
+            for tx_id in self.__dict_id2tx:  # 遍历所有的发射机
+                temp_channel.update_link_loss(self.__dict_id2tx[tx_id], self.__dict_id2rx[rx_id])
+
+                self.__dict_id2channel[temp_channel.get_rx_id()] = temp_channel
+
     # 在单小区范围内随机生成位置
     def random_position(self):
         theta = random.random() * 2 * math.pi
@@ -75,6 +87,19 @@ class SingleCell(object):
             y = r * math.cos(theta) + tx_y
         return x, y
 
-    # 初始化信道
-    def initial_channel(self):
-        pass
+    # 运行仿真流程
+    def work(self):
+        ###########################################################################################
+        # 随机分配信道
+        random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
+        ###########################################################################################
+
+        # 计算SINR
+        for rx_id in self.__dict_id2rx:  # 遍历所有的接收机
+            self.__dict_id2rx[rx_id].comp_sinr(self.__dict_id2tx, self.__dict_id2channel)
+            sinr = self.__dict_id2rx[rx_id].get_sinr()
+            if type(sinr) == float:
+                print('D2D接收机ID:' + str(rx_id) + ' SINR:' + str(sinr))
+            else:
+                for tx_id in sinr:
+                    print('基站对应的发射机ID:' + str(tx_id) + ' SINR:' + str(sinr[tx_id]))
