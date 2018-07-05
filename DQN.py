@@ -39,6 +39,9 @@ class DeepQNetwork:
         # 初始化全 0 记忆 [s, a, r, s_]      s+s_ 的维度是 n_features*2，a+r 的维度是 2
         self.memory = np.zeros((self.memory_size, n_features * 2 + 2))  # 和视频中不同, 因为 pandas 运算比较慢, 这里改为直接用 numpy
 
+        # 创建 [target_net, evaluate_net]
+        self._build_net()
+
         # 替换 target net 的参数
         t_params = tf.get_collection('target_net_params')  # 提取 target_net 的参数
         e_params = tf.get_collection('eval_net_params')  # 提取  eval_net 的参数

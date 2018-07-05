@@ -15,7 +15,7 @@ class Channel(object):
         self.__id2distance[tx_device.get_id()] = distance
 
         # 根据信道仿真标准计算路径损耗（套公式）
-        link_loss = distance
+        link_loss = 128.1 + 37.6 * math.log10(distance/1000)
         self.__link_loss[tx_device.get_id()] = link_loss
 
     def get_rx_id(self):

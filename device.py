@@ -6,18 +6,22 @@ random.seed()  # 随机数种子
 
 # 所有设备的公共接口类
 class Interface(object):
-    def __init__(self, i_id):
+    def __init__(self, i_id, i_type):
         self.__id = i_id
+        self.__type = i_type
 
     def get_id(self):
         return self.__id
 
+    def get_type(self):
+        return self.__type
+
 
 # 基站类
 class BS(Interface):
-    def __init__(self, i_id):
+    def __init__(self, i_id, i_type):
         # 调用父类的构造函数
-        Interface.__init__(self, i_id)
+        Interface.__init__(self, i_id, i_type)
         self.__power = 20  # 发射功率 dBm
         self.__x_point = 0
         self.__y_point = 0
@@ -40,6 +44,7 @@ class BS(Interface):
         return self.__power
 
     def set_allocated_rb(self, rb_id):
+        self.__allocated_rb = []
         self.__allocated_rb.append(rb_id)
 
     def get_allocated_rb(self):
@@ -88,15 +93,17 @@ class BS(Interface):
                 sinr = 10 * math.log10(receive_target_power / (receive_inter_power + thermal_noise_pow))
                 self.__tx_id2sinr[id] = sinr
 
+            return None
+
     def get_sinr(self):
         return self.__tx_id2sinr
 
 
 # 用户类
 class User(Interface):
-    def __init__(self, i_id):
+    def __init__(self, i_id, i_type):
         # 调用父类的构造函数
-        Interface.__init__(self, i_id)
+        Interface.__init__(self, i_id, i_type)
 
         self.__x_point = -1
         self.__y_point = -1
@@ -113,6 +120,7 @@ class User(Interface):
         return self.__y_point
 
     def set_allocated_rb(self, rb_id):
+        self.__allocated_rb = []
         self.__allocated_rb.append(rb_id)
 
     def get_allocated_rb(self):
@@ -121,8 +129,8 @@ class User(Interface):
 
 # 蜂窝用户类
 class CUE(User):
-    def __init__(self, i_id, power=5):
-        User.__init__(self, i_id)
+    def __init__(self, i_id, i_type, power=5):
+        User.__init__(self, i_id, i_type)
         self.__power = power
 
     def get_power(self):
@@ -131,10 +139,20 @@ class CUE(User):
 
 # D2D发射机类
 class D2DTx(User):
-    def __init__(self, i_id, power=5):
-        User.__init__(self, i_id)
+    def __init__(self, i_id, i_type, power=5):
+        User.__init__(self, i_id, i_type)
         self.__rx_id = -1
         self.__power = power
+
+        self.previous_rb = -1
+        self.previous_inter = -1
+        self.previous_neighbor_1_rb = -1
+        self.previous_neighbor_2_rb = -1
+        self.previous_neighbor_3_rb = -1
+        self.d2d_csi = -1
+        self.tx2bs_csi = -1
+        # 7维 先前RB, 先前干扰, Rx附近Tx的RB选择(暂定3个), D2D_CSI, D2DTx2BS_CSI
+        self.__observation = []
 
     # 配对
     def make_pair(self, rx_id):
@@ -143,11 +161,25 @@ class D2DTx(User):
     def get_power(self):
         return self.__power
 
+    def get_rx_id(self):
+        return self.__rx_id
+
+    def get_observation(self):
+        self.__observation = []
+        self.__observation.append(self.previous_rb)
+        self.__observation.append(self.previous_inter)
+        self.__observation.append(self.previous_neighbor_1_rb)
+        self.__observation.append(self.previous_neighbor_2_rb)
+        self.__observation.append(self.previous_neighbor_3_rb)
+        self.__observation.append(self.d2d_csi)
+        self.__observation.append(self.tx2bs_csi)
+        return self.__observation
+
 
 # D2D接收机类
 class D2DRx(User):
-    def __init__(self, i_id):
-        User.__init__(self, i_id)
+    def __init__(self, i_id, i_type):
+        User.__init__(self, i_id, i_type)
         self.__tx_id = -1
         self.__sinr = 0
 
@@ -189,6 +221,7 @@ class D2DRx(User):
                         receive_inter_power += inter_power * inter_gain
 
             self.__sinr = 10 * math.log10(receive_target_power / (receive_inter_power + thermal_noise_pow))
+            return receive_inter_power
 
     def get_sinr(self):
         return self.__sinr

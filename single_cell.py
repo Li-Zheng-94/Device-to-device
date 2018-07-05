@@ -2,17 +2,18 @@ from topology import SingleCell
 from DQN import DeepQNetwork
 
 if __name__ == '__main__':
+    slot_num = 1000  # 循环次数
     radius = 500  # m
     cue_num = 10
     d2d_num = 20
     rb_num = 10
     up_or_down_link = 'up'
     d_tx2rx = 10  # m
+
     single_cell = SingleCell(radius, cue_num, d2d_num, rb_num, up_or_down_link, d_tx2rx)
     single_cell.initial()
-    single_cell.work()
 
-    RL = DeepQNetwork(env.n_actions, env.n_features,
+    RL = DeepQNetwork(rb_num, 7,
                       learning_rate=0.01,
                       reward_decay=0.9,
                       e_greedy=0.9,
@@ -22,11 +23,8 @@ if __name__ == '__main__':
                       # output_graph=True
                       )
 
-    # 根据状态选择行为
-    action = RL.choose_action(observation)
+    for slot in range(slot_num):
+        print("循环次数：", slot)
+        single_cell.work(slot, RL)
+        single_cell.update()
 
-    # 执行行为，获取下一个状态和奖励
-    observation_, reward, done = env.step(action)
-
-    # 存储记忆
-    RL.store_transition(observation, action, reward, observation_)
