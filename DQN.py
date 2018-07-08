@@ -68,6 +68,10 @@ class DeepQNetwork:
                 ['eval_net_params', tf.GraphKeys.GLOBAL_VARIABLES], 10, \
                 tf.random_normal_initializer(0., 0.3), tf.constant_initializer(0.1)  # 神经层的参数配置
 
+            n_l1 = 200
+            n_l2 = 100
+            n_l3 = 50
+
             # eval_net 的第一层. collections 是在更新 target_net 参数时会用到
             with tf.variable_scope('l1'):
                 # collections=c_names 这一步用来存储神经网络的参数
@@ -75,11 +79,20 @@ class DeepQNetwork:
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=b_initializer, collections=c_names)
                 l1 = tf.nn.relu(tf.matmul(self.s, w1) + b1)  # l1层输入s
 
-            # eval_net 的第二层. collections 是在更新 target_net 参数时会用到
             with tf.variable_scope('l2'):
-                w2 = tf.get_variable('w2', [n_l1, self.n_actions], initializer=w_initializer, collections=c_names)
-                b2 = tf.get_variable('b2', [1, self.n_actions], initializer=b_initializer, collections=c_names)
-                self.q_eval = tf.matmul(l1, w2) + b2  # l2层输入l1，输出Q估计
+                w2 = tf.get_variable('w2', [n_l1, n_l2], initializer=w_initializer, collections=c_names)
+                b2 = tf.get_variable('b2', [1, n_l2], initializer=b_initializer, collections=c_names)
+                l2 = tf.nn.relu(tf.matmul(l1, w2) + b2)
+
+            with tf.variable_scope('l3'):
+                w3 = tf.get_variable('w3', [n_l2, n_l3], initializer=w_initializer, collections=c_names)
+                b3 = tf.get_variable('b3', [1, n_l3], initializer=b_initializer, collections=c_names)
+                l3 = tf.nn.relu(tf.matmul(l2, w3) + b3)
+
+            with tf.variable_scope('l4'):
+                w4 = tf.get_variable('w4', [n_l3, self.n_actions], initializer=w_initializer, collections=c_names)
+                b4 = tf.get_variable('b4', [1, self.n_actions], initializer=b_initializer, collections=c_names)
+                self.q_eval = tf.matmul(l3, w4) + b4  # 输出Q估计
 
         with tf.variable_scope('loss'):  # 求误差
             self.loss = tf.reduce_mean(tf.squared_difference(self.q_target, self.q_eval))
@@ -94,15 +107,25 @@ class DeepQNetwork:
 
             # target_net 的第一层. collections 是在更新 target_net 参数时会用到
             with tf.variable_scope('l1'):
+                # collections=c_names 这一步用来存储神经网络的参数
                 w1 = tf.get_variable('w1', [self.n_features, n_l1], initializer=w_initializer, collections=c_names)
                 b1 = tf.get_variable('b1', [1, n_l1], initializer=b_initializer, collections=c_names)
-                l1 = tf.nn.relu(tf.matmul(self.s_, w1) + b1)
+                l1 = tf.nn.relu(tf.matmul(self.s_, w1) + b1)  # l1层输入s
 
-            # target_net 的第二层. collections 是在更新 target_net 参数时会用到
             with tf.variable_scope('l2'):
-                w2 = tf.get_variable('w2', [n_l1, self.n_actions], initializer=w_initializer, collections=c_names)
-                b2 = tf.get_variable('b2', [1, self.n_actions], initializer=b_initializer, collections=c_names)
-                self.q_next = tf.matmul(l1, w2) + b2
+                w2 = tf.get_variable('w2', [n_l1, n_l2], initializer=w_initializer, collections=c_names)
+                b2 = tf.get_variable('b2', [1, n_l2], initializer=b_initializer, collections=c_names)
+                l2 = tf.nn.relu(tf.matmul(l1, w2) + b2)
+
+            with tf.variable_scope('l3'):
+                w3 = tf.get_variable('w3', [n_l2, n_l3], initializer=w_initializer, collections=c_names)
+                b3 = tf.get_variable('b3', [1, n_l3], initializer=b_initializer, collections=c_names)
+                l3 = tf.nn.relu(tf.matmul(l2, w3) + b3)
+
+            with tf.variable_scope('l4'):
+                w4 = tf.get_variable('w4', [n_l3, self.n_actions], initializer=w_initializer, collections=c_names)
+                b4 = tf.get_variable('b4', [1, self.n_actions], initializer=b_initializer, collections=c_names)
+                self.q_next = tf.matmul(l3, w4) + b4  # 输出Q估计
 
     def store_transition(self, s, a, r, s_):
         if not hasattr(self, 'memory_counter'):
@@ -118,6 +141,7 @@ class DeepQNetwork:
         self.memory_counter += 1
 
     def choose_action(self, observation):
+        # print(observation)
         # 统一 observation 的 shape (1, size_of_observation)
         observation = observation[np.newaxis, :]
 
@@ -125,8 +149,19 @@ class DeepQNetwork:
             # 让 eval_net 神经网络生成所有 action 的值, 并选择值最大的 action
             actions_value = self.sess.run(self.q_eval, feed_dict={self.s: observation})
             action = np.argmax(actions_value)
+            # print(action)
         else:
             action = np.random.randint(0, self.n_actions)  # 随机选择
+        return action
+
+    def choose_action_test(self, observation):
+        # 统一 observation 的 shape (1, size_of_observation)
+        observation = observation[np.newaxis, :]
+
+        # 让 eval_net 神经网络生成所有 action 的值, 并选择值最大的 action
+        actions_value = self.sess.run(self.q_eval, feed_dict={self.s: observation})
+        action = np.argmax(actions_value)
+
         return action
 
     def learn(self):
@@ -172,4 +207,5 @@ class DeepQNetwork:
         plt.plot(np.arange(len(self.cost_his)), self.cost_his)
         plt.ylabel('Cost')
         plt.xlabel('training steps')
-        plt.show()
+        # plt.show()
+        plt.savefig("Cost.png")

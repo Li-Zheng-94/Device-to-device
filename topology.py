@@ -3,6 +3,7 @@ from resource_allocation import *
 import random
 import math
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 # 单小区拓扑类
@@ -22,8 +23,8 @@ class SingleCell(object):
         self.__observations = {}
         self.__observations_ = {}
         self.__dict_tx_id2sinr = {}
-        self.__reward = 0
-        self.__action = -1
+        self.__list_rate = []
+        self.__list_slot = []
 
     def initial(self):
         # 生成蜂窝用户对象
@@ -54,6 +55,10 @@ class SingleCell(object):
             tx_x, tx_y = self.random_position()
             d2d_tx.set_location(tx_x, tx_y)
             d2d_tx.make_pair(i_id+self.__d2d_num)
+
+            # 第一个D2D发射机用于训练
+            if i_id == 1+self.__cue_num:
+                d2d_tx.train = True
 
             # D2D接收机对象
             d2d_rx = D2DRx(i_id+self.__d2d_num, 'D2DRx')
@@ -99,30 +104,17 @@ class SingleCell(object):
         if slot == 0:
             random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
         else:
-            random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
+            # random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
             for tx_id in self.__dict_id2tx:
-                tx_id = 11  # 测试 只训练 D2DTx 11
                 temp_tx = self.__dict_id2tx[tx_id]
                 if temp_tx.get_type() == 'D2DTx':
-                    if slot > 1:
-                        observation = np.array(self.__observations[11])
-                        observation_ = temp_tx.get_observation()
-                        observation_ = np.array(observation_)
-                        # 存储记忆
-                        RL.store_transition(observation, self.__action, self.__reward, observation_)
-
-                    # 当回合数大于200后，每2回合学习1次（先积累一些记忆再开始学习）
-                    if (slot > 20) and (slot % 5 == 0):
-                        RL.learn()
-
-                    observation = temp_tx.get_observation()
-                    self.__observations[tx_id] = observation
-                    observation = np.array(observation)
-                    # 根据状态选择行为
-                    action = RL.choose_action(observation)
-                    self.__action = action
-                    rb_id = action
-                    temp_tx.set_allocated_rb(rb_id)
+                    if slot >= 1:
+                        if temp_tx.train:
+                            if slot > 1:
+                                temp_tx.learn(slot, RL, self.__rb_num)
+                            temp_tx.choose_action(RL, self.__dict_id2rx, self.__rb_num)
+                        else:
+                            temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num)
 
         # 计算SINR
         for rx_id in self.__dict_id2rx:  # 遍历所有的接收机
@@ -131,7 +123,8 @@ class SingleCell(object):
             if type(sinr) == float:  # D2D
                 tx_id = self.__dict_id2rx[rx_id].get_tx_id()
                 self.__dict_tx_id2sinr[tx_id] = sinr
-                print('D2D接收机ID:' + str(rx_id) + ' SINR:' + str(sinr))
+                # print('D2D接收机ID:' + str(rx_id) + ' SINR:' + str(sinr))
+
                 # 统计previous类数据
                 temp_rx = self.__dict_id2rx[rx_id]
                 tx_id = temp_rx.get_tx_id()
@@ -144,16 +137,68 @@ class SingleCell(object):
                 temp_tx.previous_neighbor_3_rb = self.__dict_id2tx[neighbors[2]].get_allocated_rb()[0]
             else:  # CUE
                 for tx_id in sinr:
-                    print('基站对应的发射机ID:' + str(tx_id) + ' SINR:' + str(sinr[tx_id]))
+                    self.__dict_tx_id2sinr[tx_id] = sinr[tx_id]
+                    # print('基站对应的发射机ID:' + str(tx_id) + ' SINR:' + str(sinr[tx_id]))
+                    pass
 
         if slot != 0:
-            if self.__dict_tx_id2sinr[11] > 30:
-                self.__reward = 1
-            else:
-                self.__reward = -1
+            sum_rate = 0
+            for tx_id in self.__dict_tx_id2sinr:
+                sinr = self.__dict_tx_id2sinr[tx_id]
+                temp_tx = self.__dict_id2tx[tx_id]
+
+                sum_rate += 10 ** (sinr / 10)
+
+                # # D2D 和速率
+                # if temp_tx.get_type() == 'D2DTx':
+                #     sum_rate += sinr
+
+                # # 蜂窝和速率
+                # if temp_tx.get_type() == 'CUE':
+                #     sum_rate += sinr
+
+                # # 训练用户速率
+                # if temp_tx.get_type() == 'D2DTx' and temp_tx.train:
+                #     sum_rate += sinr
+
+                # 计算 reward
+                if temp_tx.get_type() == 'D2DTx':
+                    if temp_tx.train:
+                        # print('D2D SINR: ' + str(sinr))
+                        # reward = 0
+                        reward = 10 ** (sinr / 10)
+                        rb_id = temp_tx.get_allocated_rb()
+                        for tx_id_2 in self.__dict_tx_id2sinr:
+                            temp_tx_2 = self.__dict_id2tx[tx_id_2]
+                            if temp_tx_2.get_allocated_rb() == rb_id and temp_tx_2.get_type() == 'CUE':
+                                # print('CUE SINR: ' + str(self.__dict_tx_id2sinr[tx_id_2]))
+                                reward += 10 ** (self.__dict_tx_id2sinr[tx_id_2] / 10)
+                        # print('reward: ' + str(reward))
+                        # print('==========================')
+                        temp_tx.reward = reward
+
+            self.__list_rate.append(sum_rate)
+            self.__list_slot.append(slot)
+
+            # print('slot: ' + str(slot) + ' sum rate: ' + str(sum_rate))
+
+            if (slot+1) % 100 == 0:
+                print('=====================================')
+                print('slot: ', slot+1)
+                print('sum rate: ' + str(sum_rate))
+                print('=====================================')
 
     # 更新用户位置
     def update(self):
+        # 更新用户位置 更新信道
+        for rx_id in self.__dict_id2channel:
+            for tx_id in self.__dict_id2tx:  # 遍历所有的发射机
+                tx = self.__dict_id2tx[tx_id]
+                rx = self.__dict_id2rx[rx_id]
+                # tx.update_location()
+                # rx.update_location()
+                self.__dict_id2channel[rx_id].update_link_loss(tx, rx)
+
         for tx_id in self.__dict_id2tx:
             temp_tx = self.__dict_id2tx[tx_id]
             if temp_tx.get_type() == 'D2DTx':
@@ -176,3 +221,19 @@ class SingleCell(object):
         for i in range(num):
             neighbors.append(list_tx_id2distance[i][0])
         return neighbors
+
+    def plot(self):
+        x = []
+        y = []
+        slot_num = len(self.__list_slot) + 1
+        test_slot = int(slot_num / 10)
+        for i in range(slot_num):
+            if (i+1) % test_slot == 0:
+                x.append(i+1)
+                n_list = np.array(self.__list_rate[i-test_slot+1:i+1])
+                mean = n_list.mean()
+                y.append(mean)
+
+        plt.figure()
+        plt.plot(x, y)
+        plt.savefig("sum rate.png")

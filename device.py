@@ -1,5 +1,6 @@
 import random
 import math
+import numpy as np
 
 random.seed()  # 随机数种子
 
@@ -29,6 +30,9 @@ class BS(Interface):
         self.__txs_id = []  # 上行链路 蜂窝链路发射机登记表
         self.__rxs_id = []  # 下行链路 蜂窝链路接收机登记表
         self.__tx_id2sinr = {}  # 发射机ID——接收SINR登记表
+
+    def update_location(self):
+        pass
 
     def set_location(self, x_point, y_point):
         self.__x_point = x_point
@@ -126,10 +130,14 @@ class User(Interface):
     def get_allocated_rb(self):
         return self.__allocated_rb
 
+    def update_location(self):
+        self.__x_point += random.normalvariate(0, 1)
+        self.__y_point += random.normalvariate(0, 1)
+
 
 # 蜂窝用户类
 class CUE(User):
-    def __init__(self, i_id, i_type, power=5):
+    def __init__(self, i_id, i_type, power=20):
         User.__init__(self, i_id, i_type)
         self.__power = power
 
@@ -154,6 +162,10 @@ class D2DTx(User):
         # 7维 先前RB, 先前干扰, Rx附近Tx的RB选择(暂定3个), D2D_CSI, D2DTx2BS_CSI
         self.__observation = []
 
+        self.train = False
+        self.reward = 0
+        self.__action = -1
+
     # 配对
     def make_pair(self, rx_id):
         self.__rx_id = rx_id
@@ -164,16 +176,78 @@ class D2DTx(User):
     def get_rx_id(self):
         return self.__rx_id
 
-    def get_observation(self):
+    def update_observation(self, rb_num):
+        # 维度 4 * rb_num + 3
         self.__observation = []
-        self.__observation.append(self.previous_rb)
-        self.__observation.append(self.previous_inter)
-        self.__observation.append(self.previous_neighbor_1_rb)
-        self.__observation.append(self.previous_neighbor_2_rb)
-        self.__observation.append(self.previous_neighbor_3_rb)
+
+        for i in range(rb_num):
+            if i == self.previous_rb:
+                self.__observation.append(1)
+            else:
+                self.__observation.append(0)
+
+        self.__observation.append(10**12*self.previous_inter)
+
+        for i in range(rb_num):
+            if i == self.previous_neighbor_1_rb:
+                self.__observation.append(1)
+            else:
+                self.__observation.append(0)
+
+        for i in range(rb_num):
+            if i == self.previous_neighbor_2_rb:
+                self.__observation.append(1)
+            else:
+                self.__observation.append(0)
+
+        for i in range(rb_num):
+            if i == self.previous_neighbor_3_rb:
+                self.__observation.append(1)
+            else:
+                self.__observation.append(0)
+
         self.__observation.append(self.d2d_csi)
         self.__observation.append(self.tx2bs_csi)
-        return self.__observation
+
+    def choose_action(self, RL, dict_id2rx, rb_num):
+        # 根据状态选择行为
+        self.update_observation(rb_num)
+        observation = np.array(self.__observation)
+        action = RL.choose_action(observation)
+        self.__action = action
+        rb_id = action
+        self.set_allocated_rb(rb_id)
+
+        print('D2DTx ' + str(self.get_id()) + ' choose RB: ' + str(rb_id))
+
+        rx = dict_id2rx[self.__rx_id]
+        rx.set_allocated_rb(rb_id)
+
+    def choose_action_test(self, RL, dict_id2rx, rb_num):
+        # 根据状态选择行为
+        self.update_observation(rb_num)
+        observation = np.array(self.__observation)
+        action = RL.choose_action_test(observation)
+        self.__action = action
+        rb_id = action
+        self.set_allocated_rb(rb_id)
+
+        # print('D2DTx ' + str(self.get_id()) + ' choose RB: ' + str(rb_id))
+
+        rx = dict_id2rx[self.__rx_id]
+        rx.set_allocated_rb(rb_id)
+
+    def learn(self, slot, RL, rb_num):
+        observation = np.array(self.__observation)
+        self.update_observation(rb_num)
+        observation_ = np.array(self.__observation)
+        # 存储记忆
+        RL.store_transition(observation, self.__action, self.reward, observation_)
+
+        # 当回合数大于200后，每5回合学习1次（先积累一些记忆再开始学习）
+
+        if (slot > 200) and (slot % 5 == 0):
+            RL.learn()
 
 
 # D2D接收机类
