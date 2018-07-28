@@ -26,6 +26,7 @@ if __name__ == '__main__':
         if slot != 0 and slot % 2500 == 0:
             RL.save('./spectrum_allocation/save/ddqn', slot)
 
+    RL.save('./save/ddqn', slot_num)
     # single_cell.plot()
     # single_cell.save_data()
 
