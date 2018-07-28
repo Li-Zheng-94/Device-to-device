@@ -212,10 +212,10 @@ class D2DTx(User):
     def choose_action(self, RL, dict_id2rx, rb_num):
         # 根据状态选择行为
         self.update_observation(rb_num)
-        observation = np.array(self.__observation)
-        action = RL.choose_action(observation)
+        state = self.__observation
+        action = RL.act(state)
         self.__action = action
-        rb_id = action
+        rb_id = int(action)
         self.set_allocated_rb(rb_id)
 
         print('D2DTx ' + str(self.get_id()) + ' choose RB: ' + str(rb_id))
@@ -226,10 +226,10 @@ class D2DTx(User):
     def choose_action_test(self, RL, dict_id2rx, rb_num):
         # 根据状态选择行为
         self.update_observation(rb_num)
-        observation = np.array(self.__observation)
-        action = RL.choose_action_test(observation)
+        state = self.__observation
+        action = RL.act_test(state)
         self.__action = action
-        rb_id = action
+        rb_id = int(action)
         self.set_allocated_rb(rb_id)
 
         # print('D2DTx ' + str(self.get_id()) + ' choose RB: ' + str(rb_id))
@@ -238,16 +238,16 @@ class D2DTx(User):
         rx.set_allocated_rb(rb_id)
 
     def learn(self, slot, RL, rb_num):
-        observation = np.array(self.__observation)
+        state = self.__observation
         self.update_observation(rb_num)
-        observation_ = np.array(self.__observation)
+        next_state = self.__observation
         # 存储记忆
-        RL.store_transition(observation, self.__action, self.reward, observation_)
+        RL.remember(state, self.__action, self.reward, next_state)
 
-        # 当回合数大于200后，每5回合学习1次（先积累一些记忆再开始学习）
+        # 当回合数大于32后，每5回合学习1次（先积累一些记忆再开始学习）
 
-        if (slot > 200) and (slot % 5 == 0):
-            RL.learn()
+        if (slot > 32) and (slot % 5 == 0):
+            RL.replay()
 
 
 # D2D接收机类

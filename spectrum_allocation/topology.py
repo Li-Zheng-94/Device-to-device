@@ -26,6 +26,11 @@ class SingleCell(object):
         self.__list_rate = []
         self.__list_slot = []
 
+        self.__list_cue_sinr_random = []
+        self.__list_cue_sinr_rl = []
+        self.__list_d2d_sinr_random = []
+        self.__list_d2d_sinr_rl = []
+
     def initial(self):
         # 生成蜂窝用户对象
         for i_id in range(1, 1+self.__cue_num):
@@ -57,7 +62,7 @@ class SingleCell(object):
             d2d_tx.make_pair(i_id+self.__d2d_num)
 
             # 第一个D2D发射机用于训练
-            if i_id == 1+self.__cue_num:
+            if i_id == self.__cue_num+self.__d2d_num:
                 d2d_tx.train = True
 
             # D2D接收机对象
@@ -98,8 +103,27 @@ class SingleCell(object):
             y = r * math.cos(theta) + tx_y
         return x, y
 
+    def random_allocation_work(self, slot):
+        print('--------------random allocation--------------')
+        random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
+        # 计算SINR
+        for rx_id in self.__dict_id2rx:  # 遍历所有的接收机
+            inter = self.__dict_id2rx[rx_id].comp_sinr(self.__dict_id2tx, self.__dict_id2channel)
+            sinr = self.__dict_id2rx[rx_id].get_sinr()
+            if type(sinr) == float:  # D2D
+                tx_id = self.__dict_id2rx[rx_id].get_tx_id()
+                self.__dict_tx_id2sinr[tx_id] = sinr
+                # print('D2D接收机ID:' + str(rx_id) + ' SINR:' + str(sinr))
+                self.__list_d2d_sinr_random.append(sinr)
+            else:  # CUE
+                for tx_id in sinr:
+                    self.__dict_tx_id2sinr[tx_id] = sinr[tx_id]
+                    # print('基站对应的发射机ID:' + str(tx_id) + ' SINR:' + str(sinr[tx_id]))
+                    self.__list_cue_sinr_random.append(sinr[tx_id])
+
     # 运行仿真流程
     def work(self, slot, RL):
+        print('--------------reinforcement learning------------')
         # 随机分配信道
         if slot == 0:
             random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
@@ -115,6 +139,11 @@ class SingleCell(object):
                             temp_tx.choose_action(RL, self.__dict_id2rx, self.__rb_num)
                         else:
                             temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num)
+                            # pass
+                        self.update_neighbor_rb(temp_tx)
+
+            if slot % 200 == 0:
+                RL.update_target_model()
 
         # 计算SINR
         for rx_id in self.__dict_id2rx:  # 遍历所有的接收机
@@ -131,15 +160,14 @@ class SingleCell(object):
                 temp_tx = self.__dict_id2tx[tx_id]
                 temp_tx.previous_rb = temp_tx.get_allocated_rb()[0]
                 temp_tx.previous_inter = inter
-                neighbors = self.get_neighbors(temp_rx, 3)
-                temp_tx.previous_neighbor_1_rb = self.__dict_id2tx[neighbors[0]].get_allocated_rb()[0]
-                temp_tx.previous_neighbor_2_rb = self.__dict_id2tx[neighbors[1]].get_allocated_rb()[0]
-                temp_tx.previous_neighbor_3_rb = self.__dict_id2tx[neighbors[2]].get_allocated_rb()[0]
+                # neighbors = self.get_neighbors(temp_rx, 3)
+                # temp_tx.previous_neighbor_1_rb = self.__dict_id2tx[neighbors[0]].get_allocated_rb()[0]
+                # temp_tx.previous_neighbor_2_rb = self.__dict_id2tx[neighbors[1]].get_allocated_rb()[0]
+                # temp_tx.previous_neighbor_3_rb = self.__dict_id2tx[neighbors[2]].get_allocated_rb()[0]
             else:  # CUE
                 for tx_id in sinr:
                     self.__dict_tx_id2sinr[tx_id] = sinr[tx_id]
                     # print('基站对应的发射机ID:' + str(tx_id) + ' SINR:' + str(sinr[tx_id]))
-                    pass
 
         if slot != 0:
             sum_rate = 0
@@ -147,7 +175,7 @@ class SingleCell(object):
                 sinr = self.__dict_tx_id2sinr[tx_id]
                 temp_tx = self.__dict_id2tx[tx_id]
 
-                sum_rate += 10 ** (sinr / 10)
+                # sum_rate += 10 ** (sinr / 10)
 
                 # # D2D 和速率
                 # if temp_tx.get_type() == 'D2DTx':
@@ -157,9 +185,9 @@ class SingleCell(object):
                 # if temp_tx.get_type() == 'CUE':
                 #     sum_rate += sinr
 
-                # # 训练用户速率
-                # if temp_tx.get_type() == 'D2DTx' and temp_tx.train:
-                #     sum_rate += sinr
+                # 训练用户速率
+                if temp_tx.get_type() == 'D2DTx' and temp_tx.train:
+                    sum_rate += sinr
 
                 # 计算 reward
                 if temp_tx.get_type() == 'D2DTx':
@@ -171,8 +199,12 @@ class SingleCell(object):
                         for tx_id_2 in self.__dict_tx_id2sinr:
                             temp_tx_2 = self.__dict_id2tx[tx_id_2]
                             if temp_tx_2.get_allocated_rb() == rb_id and temp_tx_2.get_type() == 'CUE':
+                                cue_sinr = self.__dict_tx_id2sinr[tx_id_2]
+                                if cue_sinr < 0:
+                                    reward = -10000
                                 # print('CUE SINR: ' + str(self.__dict_tx_id2sinr[tx_id_2]))
-                                reward += 10 ** (self.__dict_tx_id2sinr[tx_id_2] / 10)
+                                # reward += 10 ** (self.__dict_tx_id2sinr[tx_id_2] / 10)
+                                pass
                         # print('reward: ' + str(reward))
                         # print('==========================')
                         temp_tx.reward = reward
@@ -183,10 +215,45 @@ class SingleCell(object):
             # print('slot: ' + str(slot) + ' sum rate: ' + str(sum_rate))
 
             if (slot+1) % 100 == 0:
+                # RL.save("./save/ddqn_", slot+1)  # save model
                 print('=====================================')
                 print('slot: ', slot+1)
                 print('sum rate: ' + str(sum_rate))
                 print('=====================================')
+
+    def rl_test_work(self, slot, RL):
+        print('--------------reinforcement learning------------')
+        # 随机分配信道
+        if slot == 0:
+            random_allocation(self.__dict_id2tx, self.__dict_id2rx, self.__rb_num)
+        else:
+            for tx_id in self.__dict_id2tx:
+                temp_tx = self.__dict_id2tx[tx_id]
+                if temp_tx.get_type() == 'D2DTx':
+                    temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num)
+                    self.update_neighbor_rb(temp_tx)
+
+        # 计算SINR
+        for rx_id in self.__dict_id2rx:  # 遍历所有的接收机
+            inter = self.__dict_id2rx[rx_id].comp_sinr(self.__dict_id2tx, self.__dict_id2channel)
+            sinr = self.__dict_id2rx[rx_id].get_sinr()
+            if type(sinr) == float:  # D2D
+                tx_id = self.__dict_id2rx[rx_id].get_tx_id()
+                self.__dict_tx_id2sinr[tx_id] = sinr
+                # print('D2D接收机ID:' + str(rx_id) + ' SINR:' + str(sinr))
+                self.__list_d2d_sinr_rl.append(sinr)
+
+                # 统计previous类数据
+                temp_rx = self.__dict_id2rx[rx_id]
+                tx_id = temp_rx.get_tx_id()
+                temp_tx = self.__dict_id2tx[tx_id]
+                temp_tx.previous_rb = temp_tx.get_allocated_rb()[0]
+                temp_tx.previous_inter = inter
+            else:  # CUE
+                for tx_id in sinr:
+                    self.__dict_tx_id2sinr[tx_id] = sinr[tx_id]
+                    # print('基站对应的发射机ID:' + str(tx_id) + ' SINR:' + str(sinr[tx_id]))
+                    self.__list_cue_sinr_rl.append(sinr[tx_id])
 
     # 更新用户位置
     def update(self):
@@ -237,3 +304,32 @@ class SingleCell(object):
         plt.figure()
         plt.plot(x, y)
         plt.savefig("sum rate.png")
+
+    def update_neighbor_rb(self, temp_tx):
+        rx_id = temp_tx.get_rx_id()
+        temp_rx = self.__dict_id2rx[rx_id]
+        neighbors = self.get_neighbors(temp_rx, 3)
+        temp_tx.previous_neighbor_1_rb = self.__dict_id2tx[neighbors[0]].get_allocated_rb()[0]
+        temp_tx.previous_neighbor_2_rb = self.__dict_id2tx[neighbors[1]].get_allocated_rb()[0]
+        temp_tx.previous_neighbor_3_rb = self.__dict_id2tx[neighbors[2]].get_allocated_rb()[0]
+
+    def save_data(self):
+        with open('./result/cue_sinr_random.txt', 'w') as f:
+            for sinr in self.__list_cue_sinr_random:
+                f.write(str(sinr))
+                f.write('\n')
+
+        with open('./result/cue_sinr_rl.txt', 'w') as f:
+            for sinr in self.__list_cue_sinr_rl:
+                f.write(str(sinr))
+                f.write('\n')
+
+        with open('./result/d2d_sinr_random.txt', 'w') as f:
+            for sinr in self.__list_d2d_sinr_random:
+                f.write(str(sinr))
+                f.write('\n')
+
+        with open('./result/d2d_sinr_rl.txt', 'w') as f:
+            for sinr in self.__list_d2d_sinr_rl:
+                f.write(str(sinr))
+                f.write('\n')
