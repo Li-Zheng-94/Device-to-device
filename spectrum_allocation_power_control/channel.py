@@ -14,10 +14,16 @@ class Channel(object):
                                 rx_device.get_x_point(), rx_device.get_y_point())
         self.__id2distance[tx_device.get_id()] = distance
 
-        # 根据信道仿真标准计算路径损耗（套公式）
-        link_loss = 128.1 + 37.6 * math.log10(distance/1000)
-        shadow = random.normalvariate(0, 10)
-        # shadow = 0
+        if rx_device.get_type() == 'BS':
+            # 根据信道仿真标准计算路径损耗（套公式）
+            link_loss = 128.1 + 37.6 * math.log10(distance/1000)
+            shadow = random.normalvariate(0, 10)
+            # shadow = 0
+        else:
+            # 根据信道仿真标准计算路径损耗（套公式）
+            link_loss = 128.1 + 37.6 * math.log10(distance / 1000)
+            shadow = random.normalvariate(0, 10)
+            # shadow = 0
         self.__link_loss[tx_device.get_id()] = link_loss + shadow
 
     def get_rx_id(self):

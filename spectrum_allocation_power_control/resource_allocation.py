@@ -1,4 +1,4 @@
-from device import *
+from spectrum_allocation_power_control.device import *
 
 
 def random_allocation(dict_id2tx, dict_id2rx, rb_num):

@@ -1,5 +1,5 @@
-from channel import *
-from resource_allocation import *
+from spectrum_allocation_power_control.channel import *
+from spectrum_allocation_power_control.resource_allocation import *
 import random
 import math
 import numpy as np
@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 
 # 单小区拓扑类
 class SingleCell(object):
-    def __init__(self, radius, cue_num, d2d_num, rb_num, up_or_down_link, d_tx2rx):
+    def __init__(self, radius, cue_num, d2d_num, rb_num, up_or_down_link, d_tx2rx, power_level_num):
         self.__radius = radius  # 小区半径
         self.__cue_num = cue_num
         self.__d2d_num = d2d_num
         self.__rb_num = rb_num
         self.__up_or_down_link = up_or_down_link
         self.__d_tx2rx = d_tx2rx  # D2D发射机与接收机之间的最大距离
+        self.__power_level_num = power_level_num
 
         self.__dict_id2device = {}  # id-设备对象登记表
         self.__dict_id2rx = {}  # id-接收机对象登记表
@@ -136,9 +137,9 @@ class SingleCell(object):
                         if temp_tx.train:
                             if slot > 1:
                                 temp_tx.learn(slot, RL, self.__rb_num)
-                            temp_tx.choose_action(RL, self.__dict_id2rx, self.__rb_num)
+                            temp_tx.choose_action(RL, self.__dict_id2rx, self.__rb_num, self.__power_level_num)
                         else:
-                            temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num)
+                            temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num, self.__power_level_num)
                             # pass
                         self.update_neighbor_rb(temp_tx)
 
@@ -160,10 +161,6 @@ class SingleCell(object):
                 temp_tx = self.__dict_id2tx[tx_id]
                 temp_tx.previous_rb = temp_tx.get_allocated_rb()[0]
                 temp_tx.previous_inter = inter
-                # neighbors = self.get_neighbors(temp_rx, 3)
-                # temp_tx.previous_neighbor_1_rb = self.__dict_id2tx[neighbors[0]].get_allocated_rb()[0]
-                # temp_tx.previous_neighbor_2_rb = self.__dict_id2tx[neighbors[1]].get_allocated_rb()[0]
-                # temp_tx.previous_neighbor_3_rb = self.__dict_id2tx[neighbors[2]].get_allocated_rb()[0]
             else:  # CUE
                 for tx_id in sinr:
                     self.__dict_tx_id2sinr[tx_id] = sinr[tx_id]
@@ -174,16 +171,6 @@ class SingleCell(object):
             for tx_id in self.__dict_tx_id2sinr:
                 sinr = self.__dict_tx_id2sinr[tx_id]
                 temp_tx = self.__dict_id2tx[tx_id]
-
-                # sum_rate += 10 ** (sinr / 10)
-
-                # # D2D 和速率
-                # if temp_tx.get_type() == 'D2DTx':
-                #     sum_rate += sinr
-
-                # # 蜂窝和速率
-                # if temp_tx.get_type() == 'CUE':
-                #     sum_rate += sinr
 
                 # 训练用户速率
                 if temp_tx.get_type() == 'D2DTx' and temp_tx.train:
@@ -230,7 +217,7 @@ class SingleCell(object):
             for tx_id in self.__dict_id2tx:
                 temp_tx = self.__dict_id2tx[tx_id]
                 if temp_tx.get_type() == 'D2DTx':
-                    temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num)
+                    temp_tx.choose_action_test(RL, self.__dict_id2rx, self.__rb_num, self.__power_level_num)
                     self.update_neighbor_rb(temp_tx)
 
         # 计算SINR

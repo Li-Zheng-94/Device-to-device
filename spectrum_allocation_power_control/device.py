@@ -151,6 +151,12 @@ class D2DTx(User):
         User.__init__(self, i_id, i_type)
         self.__rx_id = -1
         self.__power = power
+        '''
+        power level:
+        0 —— 2dB
+        1 —— 5dB
+        2 —— 8dB
+        '''
 
         self.previous_rb = -1
         self.previous_inter = -1
@@ -209,30 +215,35 @@ class D2DTx(User):
         self.__observation.append(self.d2d_csi)
         self.__observation.append(self.tx2bs_csi)
 
-    def choose_action(self, RL, dict_id2rx, rb_num):
+    def choose_action(self, RL, dict_id2rx, rb_num, power_level_num):
         # 根据状态选择行为
         self.update_observation(rb_num)
         state = self.__observation
         action = RL.act(state)
         self.__action = action
-        rb_id = int(action)
+        action = int(action)
+        rb_id = int(action / power_level_num)
+        power_level = action % power_level_num
         self.set_allocated_rb(rb_id)
+        self.__power = 2 + power_level * 3
 
-        print('D2DTx ' + str(self.get_id()) + ' choose RB: ' + str(rb_id))
+        print('D2DTx ' + str(self.get_id()) +
+              ' choose RB: ' + str(rb_id) + ' power: ' + str(self.__power) + ' dB')
 
         rx = dict_id2rx[self.__rx_id]
         rx.set_allocated_rb(rb_id)
 
-    def choose_action_test(self, RL, dict_id2rx, rb_num):
+    def choose_action_test(self, RL, dict_id2rx, rb_num, power_level_num):
         # 根据状态选择行为
         self.update_observation(rb_num)
         state = self.__observation
         action = RL.act_test(state)
         self.__action = action
-        rb_id = int(action)
+        action = int(action)
+        rb_id = int(action / power_level_num)
+        power_level = action % power_level_num
         self.set_allocated_rb(rb_id)
-
-        # print('D2DTx ' + str(self.get_id()) + ' choose RB: ' + str(rb_id))
+        self.__power = 2 + power_level * 3
 
         rx = dict_id2rx[self.__rx_id]
         rx.set_allocated_rb(rb_id)
