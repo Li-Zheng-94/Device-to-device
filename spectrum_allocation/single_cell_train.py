@@ -1,7 +1,7 @@
-from topology import SingleCell
+from spectrum_allocation.topology import SingleCell
 # from DQN import DeepQNetwork
 # from dqn_keras import DQNAgent
-from ddqn_keras import DDQNAgent
+from spectrum_allocation.ddqn_keras import DDQNAgent
 
 if __name__ == '__main__':
     slot_num = 50000  # 循环次数
@@ -24,7 +24,7 @@ if __name__ == '__main__':
         single_cell.work(slot, RL)
         single_cell.update()
         if slot != 0 and slot % 2500 == 0:
-            RL.save('./save/ddqn', slot)
+            RL.save('./spectrum_allocation/save/ddqn', slot)
 
     # single_cell.plot()
     # single_cell.save_data()

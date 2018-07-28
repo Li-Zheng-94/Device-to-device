@@ -1,5 +1,5 @@
-from topology import SingleCell
-from ddqn_keras import DDQNAgent
+from spectrum_allocation.topology import SingleCell
+from spectrum_allocation.ddqn_keras import DDQNAgent
 
 if __name__ == '__main__':
     slot_num = 1000  # 循环次数

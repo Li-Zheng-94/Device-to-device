@@ -1,5 +1,5 @@
-from channel import *
-from resource_allocation import *
+from spectrum_allocation.channel import *
+from spectrum_allocation.resource_allocation import *
 import random
 import math
 import numpy as np
