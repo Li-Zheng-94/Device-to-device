@@ -23,7 +23,7 @@ class BS(Interface):
     def __init__(self, i_id, i_type):
         # 调用父类的构造函数
         Interface.__init__(self, i_id, i_type)
-        self.__power = 20  # 发射功率 dBm
+        self.__power = 40  # 发射功率 dBm
         self.__x_point = 0
         self.__y_point = 0
         self.__allocated_rb = []
@@ -67,7 +67,7 @@ class BS(Interface):
         if len(self.get_allocated_rb()):
             # 计算噪声功率  1个RB, 12个连续的载波, 12 * 15000 = 180000Hz
             white_noise = -174  # -174dBm / Hz
-            noise_fig = 5  # dB
+            noise_fig = 1  # dB
             noise_fig = pow(10, noise_fig / 10)  # 线性值
             thermal_noise_pow = pow(10, (white_noise - 30) / 10) * 180000 * noise_fig  # 线性值
 
@@ -137,7 +137,7 @@ class User(Interface):
 
 # 蜂窝用户类
 class CUE(User):
-    def __init__(self, i_id, i_type, power=20):
+    def __init__(self, i_id, i_type, power=40):
         User.__init__(self, i_id, i_type)
         self.__power = power
 
@@ -279,7 +279,7 @@ class D2DRx(User):
         if len(self.get_allocated_rb()):
             # 计算噪声功率  1个RB, 12个连续的载波, 12 * 15000 = 180000Hz
             white_noise = -174  # -174dBm / Hz
-            noise_fig = 5  # dB
+            noise_fig = 1  # dB
             noise_fig = pow(10, noise_fig / 10)  # 线性值
             thermal_noise_pow = pow(10, (white_noise - 30) / 10) * 180000 * noise_fig  # 线性值
 

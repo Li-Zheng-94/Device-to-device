@@ -2,7 +2,7 @@ from spectrum_allocation_power_control.topology import SingleCell
 from spectrum_allocation_power_control.ddqn_keras import DDQNAgent
 
 if __name__ == '__main__':
-    slot_num = 5000  # 循环次数
+    slot_num = 2000  # 循环次数
     radius = 500  # m
     cue_num = 10
     d2d_num = 20
