@@ -17,12 +17,14 @@ class Channel(object):
         if rx_device.get_type() == 'BS':
             # 根据信道仿真标准计算路径损耗（套公式）
             link_loss = 128.1 + 37.6 * math.log10(distance/1000)
+            # link_loss = 15.3 + 37.6 * math.log10(distance / 1000)
             shadow = random.normalvariate(0, 10)
             # shadow = 0
         else:
             # 根据信道仿真标准计算路径损耗（套公式）
-            link_loss = 128.1 + 37.6 * math.log10(distance / 1000)
-            shadow = random.normalvariate(0, 10)
+            link_loss = 40 * math.log10(distance / 1000) + 30 * math.log10(2000) + 49
+            # link_loss = 28 + 40 * math.log10(distance / 1000)
+            shadow = random.normalvariate(0, 12)
             # shadow = 0
         self.__link_loss[tx_device.get_id()] = link_loss + shadow
 
